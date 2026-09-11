@@ -2,5 +2,9 @@
 name = "eegy"
 version = "0.1.0"
 edition = "2024"
+description = "An easy EEG signal processing library in Rust"
+
+[lib]
+crate-tye = ["cdylib"] # C言語互換動的ライブラリ
 
 [dependencies]
