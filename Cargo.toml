@@ -8,3 +8,6 @@ description = "An easy EEG signal processing library in Rust"
 crate-type = ["cdylib"] # C言語互換動的ライブラリ
 
 [dependencies]
+
+[build-dependencies]
+csbindgen = "1.9.8"
