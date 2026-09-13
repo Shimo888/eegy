@@ -5,6 +5,6 @@ edition = "2024"
 description = "An easy EEG signal processing library in Rust"
 
 [lib]
-crate-tye = ["cdylib"] # C言語互換動的ライブラリ
+crate-type = ["cdylib"] # C言語互換動的ライブラリ
 
 [dependencies]
