@@ -8,7 +8,7 @@ using System;
 using System.Runtime.InteropServices;
 
 
-namespace CsBindgen
+namespace Eegy.Native
 {
     internal static unsafe partial class NativeMethods
     {
