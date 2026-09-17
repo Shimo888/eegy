@@ -1,0 +1,11 @@
+{
+  "name": "com.shimo888.eegy",
+  "displayName": "Eegy",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "An easy EEG signal processing library",
+  "author": {
+    "name": "Shimo888",
+    "url": "https://github.com/Shimo888"
+  }
+}
