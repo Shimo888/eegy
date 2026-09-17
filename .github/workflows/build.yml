@@ -58,7 +58,7 @@ jobs:
       
       # PRを作成 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore: update native binaries"
           title: "chore: update native binaries"
