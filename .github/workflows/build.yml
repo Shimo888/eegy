@@ -1,0 +1,67 @@
+# ビルドして動的ライブラリをUnityフォルダ以下にコピーするワークフロー 
+name: Build and Update Native Binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  # windowsでビルドしてdllをartifactにupload
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Windows DLL
+        run: cargo build --release
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-dll
+          path: target/release/eegy.dll
+          retention-days: 1
+
+  # macでビルドしてdylibをartifactにupload
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build macOS dylib
+        run: cargo build --release
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dylib
+          path: target/release/libeegy.dylib
+          retention-days: 1
+
+  update-repo:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      
+      # windowsのDLLをartifactからDownload 
+      - name: Download Windows DLL
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-dll
+          path: eegy-unity/Assets/Eegy/Plugins/
+
+      # macのdylibをartifactあらDownload
+      - name: Download macOS dylib
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dylib
+          path: eegy-unity/Assets/Eegy/Plugins/
+      
+      # PRを作成 
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: update native binaries"
+          title: "chore: update native binaries"
+          body: "Rustのビルド成果物（DLL/dylib）を更新する自動生成PRです。"
+          branch: "update-native-binaries" # この名前のブランチが自動で作られます
+          labels: "automated pr"
