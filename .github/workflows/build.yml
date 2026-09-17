@@ -9,11 +9,11 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build Windows DLL
         run: cargo build --release
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-dll
           path: target/release/eegy.dll
@@ -23,11 +23,11 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build macOS dylib
         run: cargo build --release
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dylib
           path: target/release/libeegy.dylib
@@ -40,18 +40,18 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       # windowsのDLLをartifactからDownload 
       - name: Download Windows DLL
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: windows-dll
           path: eegy-unity/Assets/Eegy/Plugins/
 
       # macのdylibをartifactあらDownload
       - name: Download macOS dylib
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: macos-dylib
           path: eegy-unity/Assets/Eegy/Plugins/
