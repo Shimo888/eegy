@@ -22,14 +22,14 @@ impl std::error::Error for ChunkBuildError {}
 
 /// Chunkのbuilder
 /// チェーンメソッド形式で初期化できるようにしとく
-pub struct ChunkBuilder<'a>{
+pub struct ChunkBuilder{
     value_arrays: Vec<Vec<f64>>,
     channel_map: HashMap<String, usize>,
-    packet_nums: Option<&'a [u64]>,
+    packet_nums: Option<Vec<u64>>,
     sampling_rate: Option<u32>,
 }
 
-impl <'a> ChunkBuilder<'a>{
+impl ChunkBuilder{
     pub fn new() -> Self{
         Self{
             value_arrays: Vec::new(),
@@ -71,8 +71,61 @@ impl <'a> ChunkBuilder<'a>{
     }
 
     /// パケット番号のリストの設定
-    pub fn set_packet_num_array(mut self, packet_num_array: &'a [u64]) -> Self{
+    pub fn set_packet_num_array(mut self, packet_num_array: Vec<u64>) -> Self{
         self.packet_nums = Some(packet_num_array);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_build_success() {
+        let packet_nums = vec![1, 2, 3];
+        let chunk = ChunkBuilder::new()
+            .set_sampling_rate(250)
+            .set_packet_num_array(packet_nums)
+            .set_sample_buffer("Fp1".to_string(), vec![1.0, 2.0, 3.0])
+            .set_sample_buffer("Fp2".to_string(), vec![4.0, 5.0, 6.0])
+            .build();
+
+        assert!(chunk.is_ok(), "Chunk should be built successfully");
+    }
+
+    #[test]
+    fn test_build_missing_sampling_rate() {
+        let packet_nums = vec![1, 2, 3];
+        let err = ChunkBuilder::new()
+            .set_packet_num_array(packet_nums)
+            .set_sample_buffer("Fp1".to_string(), vec![1.0, 2.0, 3.0])
+            .build()
+            .unwrap_err();
+        
+        assert_eq!(err, ChunkBuildError::MissingSamplingRate);
+    }
+
+    #[test]
+    fn test_build_missing_packet_nums() {
+        let err = ChunkBuilder::new()
+            .set_sampling_rate(250)
+            .set_sample_buffer("Fp1".to_string(), vec![1.0, 2.0, 3.0])
+            .build()
+            .unwrap_err();
+        
+        assert_eq!(err, ChunkBuildError::MissingPacketNums);
+    }
+
+    #[test]
+    fn test_build_empty_sample_buffers() {
+        let packet_nums = vec![1, 2, 3];
+        let err = ChunkBuilder::new()
+            .set_sampling_rate(250)
+            .set_packet_num_array(packet_nums)
+            .build()
+            .unwrap_err();
+        
+        assert_eq!(err, ChunkBuildError::EmptySampleBuffers);
     }
 }
