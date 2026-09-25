@@ -1,3 +1,6 @@
+mod chunk;
+mod chunk_builder;
+
 #[unsafe(no_mangle)]
 pub extern "C" fn sample_func_add(a: i32, b: i32) -> i32 {
     a + b
