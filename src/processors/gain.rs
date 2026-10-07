@@ -3,31 +3,31 @@ use crate::core::buffer::{Buffer};
 
 pub struct GainProcessor {
     gain: f64,
-    buffer: Buffer,
 }
 
 impl GainProcessor {
     pub fn new(gain: f64) -> Self{
         Self{
             gain,
-            buffer: Buffer::None,
         }
     }
 }
 
 impl Processor for GainProcessor {
-    fn setup(&mut self, inputs: &[&Buffer]) -> Result<(), String> {
-        self.buffer = inputs[0].clone();
+    fn setup(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String> {
+        let input = inputs.get(0).ok_or("input 0 is required")?;
+        let output = outputs.get_mut(0).ok_or("output 0 is required")?;
+        *output = input.clone();
         Ok(())
     }
 
-    fn process(&mut self, inputs: &[&Buffer]) -> Result<(), String> {
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) -> Result<(), String> {
         let input_signal = inputs.first()
             .and_then(|input| input.as_time())
             .ok_or("Input 0 is missing or not TimeDomain")?;
         
-        let output_signal = self.buffer
-            .as_time_mut()
+        let output_signal = outputs.first_mut()
+            .and_then(|output| output.as_time_mut())
             .ok_or("Output buffer is not TimeDomain")?;
         
         output_signal.first_packet_num = input_signal.first_packet_num;
@@ -36,10 +36,6 @@ impl Processor for GainProcessor {
             *output = self.gain * input;
         } 
         Ok(())
-    }
-    
-    fn get_outputs(&self, port: usize) -> Option<&Buffer> {
-        Some(&self.buffer)
     }
 }
 
@@ -86,13 +82,13 @@ mod tests {
 
         let mut gain_node = GainProcessor::new(2.0);
 
-        let inputs = [&input_buffer];
+        let inputs = vec![input_buffer];
+        let mut outputs = vec![Buffer::None]; 
         
-        assert!(gain_node.setup(&inputs).is_ok());
-        assert!(gain_node.process(&inputs).is_ok());
+        assert!(gain_node.setup(&inputs, &mut outputs).is_ok());
+        assert!(gain_node.process(&inputs, &mut outputs).is_ok());
 
-        let output = gain_node.get_outputs(0);
-        let out_time = output.unwrap().as_time().unwrap();
+        let out_time = outputs[0].as_time().unwrap();
 
         assert_eq!(out_time.first_packet_num, 100);
         assert_eq!(out_time.channels, vec!["Fp1", "Fp2"]);

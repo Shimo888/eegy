@@ -1,9 +1,8 @@
 use crate::core::buffer::Buffer;
 
 pub trait Processor : ProcessorMeta{
-    fn setup(&mut self, inputs: &[&Buffer]) -> Result<(), String>;
-    fn process(&mut self, inputs: &[&Buffer]) -> Result<(), String>;
-    fn get_outputs(&self, port: usize) -> Option<&Buffer>;
+    fn setup(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String>;
+    fn process(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String>;
 }
 
 pub trait ProcessorMeta{

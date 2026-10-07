@@ -83,7 +83,7 @@ impl GraphEngine {
             .iter()
             .any(|src_type| dst_port_info.types.contains(src_type));
         if !validate_port_types {
-            return Err(format!("Invalid port types specified"));
+            return Err("Invalid port types specified".to_string());
         }
 
         // 存在していればEdgeを作成

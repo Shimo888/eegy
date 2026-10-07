@@ -25,14 +25,12 @@ impl ProcessorMeta for FrequencyDummyProcessor {
     }
 }
 impl Processor for FrequencyDummyProcessor {
-    fn setup(&mut self, _inputs: &[&Buffer]) -> Result<(), String> {
+    fn setup(&mut self, _inputs: &[Buffer], _outputs: &mut [Buffer]) -> Result<(), String> {
         Ok(())
     }
-    fn process(&mut self, _inputs: &[&Buffer]) -> Result<(), String> {
+
+    fn process(&mut self, _inputs: &[Buffer], _outputs: &mut [Buffer]) -> Result<(), String> {
         Ok(())
-    }
-    fn get_outputs(&self, _port: usize) -> Option<&Buffer> {
-        None
     }
 }
 
