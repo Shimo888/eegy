@@ -1,4 +1,5 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
+use smallvec::SmallVec;
 use crate::core::processor::Processor;
 use std::collections::HashMap;
 use crate::core::buffer::Buffer;
@@ -148,30 +149,10 @@ impl GraphEngine {
         
         for node_id in &execution_order{
             let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
-            
-            // 1: 入力Refを集める
-            let input_guards = node.in_buffer_indices.iter()
-                .map(|idx| idx.
-                    map(|id| buffers[id].borrow())) 
-                .collect::<Vec<_>>();
-            
-            // 2: 出力Refを集める
-            let mut output_guards = node.out_buffer_indices.iter()
-                .map(|&idx| buffers[idx].borrow_mut())
-                .collect::<Vec<_>>();
 
-            // 3: 入力Bufferを集める
-            let inputs = input_guards.iter()
-                .map(|b| b.as_deref().unwrap_or(&Buffer::None))
-                .collect::<Vec<_>>();
-            
-            // 4 出力Bufferを集める
-            let mut outputs = output_guards.iter_mut()
-                .map(|x|&mut **x)
-                .collect::<Vec<_>>();
-            
-            // 5: セットアップ
-            node.processor.setup(&inputs, &mut outputs)?;
+            node.with_buffers(&buffers,
+                              |processor, inputs, outputs|{
+                                  processor.setup(inputs, outputs) })?;
         }
 
         self.execution_order = execution_order;
@@ -231,30 +212,9 @@ impl GraphEngine {
 
         for node_id in &self.execution_order{
             let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
-
-            // 1: 入力Refを集める
-            let input_guards = node.in_buffer_indices.iter()
-                .map(|idx| idx.
-                    map(|id| self.buffer_manager.buffers[id].borrow()))
-                .collect::<Vec<_>>();
-
-            // 2: 出力Refを集める
-            let mut output_guards = node.out_buffer_indices.iter()
-                .map(|&idx| self.buffer_manager.buffers[idx].borrow_mut())
-                .collect::<Vec<_>>();
-
-            // 3: 入力Bufferを集める
-            let inputs = input_guards.iter()
-                .map(|b| b.as_deref().unwrap_or(&Buffer::None))
-                .collect::<Vec<_>>();
-
-            // 4 出力Bufferを集める
-            let mut outputs = output_guards.iter_mut()
-                .map(|x|&mut **x)
-                .collect::<Vec<_>>();
-
-            // 5: 実行
-            node.processor.process(&inputs, &mut outputs)?;
+            node.with_buffers(&self.buffer_manager.buffers, 
+                              |processor, inputs, outputs|{ 
+                                  processor.process(inputs, outputs)})?;
         }
  
         Ok(())
@@ -338,6 +298,37 @@ impl Node{
             in_buffer_indices: vec![None; num_input],
             out_buffer_indices: vec![0; num_output],
         }
+    }
+
+    fn with_buffers<F>(
+        &mut self,
+        buffers: &Vec<RefCell<Buffer>>,
+        mut f: F,
+    ) -> Result<(), String>
+    where F: FnMut(&mut dyn Processor, &[&Buffer], &mut [&mut Buffer]) -> Result<(), String>,
+    {
+        // 1: 入力Refを集める (最大8ポートまでスタック)
+        let input_guards: SmallVec<[Option<Ref<'_, Buffer>>; 8]> = self.in_buffer_indices.iter()
+            .map(|idx| idx.map(|id| buffers[id].borrow()))
+            .collect();
+
+        // 2: 出力Refを集める (最大8ポートまでスタック)
+        let mut output_guards: SmallVec<[RefMut<'_, Buffer>; 8]> = self.out_buffer_indices.iter()
+            .map(|&idx| buffers[idx].borrow_mut())
+            .collect();
+
+        // 3: 入力Bufferを集める
+        let inputs: SmallVec<[&Buffer; 8]> = input_guards.iter()
+            .map(|b| b.as_deref().unwrap_or(&Buffer::None))
+            .collect();
+
+        // 4 出力Bufferを集める
+        let mut outputs: SmallVec<[&mut Buffer; 8]> = output_guards.iter_mut()
+            .map(|x| &mut **x)
+            .collect();
+        
+        f(&mut *self.processor, &inputs, &mut outputs)?;
+        Ok(())
     }
 }
 

@@ -8,6 +8,7 @@ description = "An easy EEG signal processing library in Rust"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+smallvec = "1.16.3"
 
 [build-dependencies]
 csbindgen = "1.9.8"
