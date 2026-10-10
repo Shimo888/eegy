@@ -631,7 +631,7 @@ fn test_setup_linear_pipeline_buffer_propagation() {
     // 末尾の Gain2 の出力バッファを確認
     let gain2_node = engine.nodes.get(&n_gain2).unwrap();
     let buf_idx = gain2_node.out_buffer_indices[0];
-    let out_buf = &engine.buffers[buf_idx].borrow();
+    let out_buf = &engine.buffers[buf_idx];
     let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
 
     assert_eq!(time_buf.sampling_rate, 250.0);
@@ -663,11 +663,11 @@ fn test_setup_fan_out() {
     // 両方のノードが親のサンプリングレート 500.0Hz で初期化されていること
     let node_a = engine.nodes.get(&n_gain_a).unwrap();
     let buf_a_idx = node_a.out_buffer_indices[0];
-    assert_eq!(engine.buffers[buf_a_idx].borrow().as_time().unwrap().sampling_rate, 500.0);
+    assert_eq!(engine.buffers[buf_a_idx].as_time().unwrap().sampling_rate, 500.0);
 
     let node_b = engine.nodes.get(&n_gain_b).unwrap();
     let buf_b_idx = node_b.out_buffer_indices[0];
-    assert_eq!(engine.buffers[buf_b_idx].borrow().as_time().unwrap().sampling_rate, 500.0);
+    assert_eq!(engine.buffers[buf_b_idx].as_time().unwrap().sampling_rate, 500.0);
 }
 
 /// 必須入力ポート未接続の拒絶テスト:
@@ -729,7 +729,7 @@ fn test_setup_with_unconnected_optional_port() {
 
     // ポート1の入力がそのまま出力されていること
     let node = engine.nodes.get(&n_opt).unwrap();
-    let out_buf = engine.buffers[node.out_buffer_indices[0]].borrow();
+    let out_buf = &engine.buffers[node.out_buffer_indices[0]];
     assert_eq!(*out_buf, source_buffer);
 }
 
@@ -821,7 +821,7 @@ fn test_process_linear_pipeline() {
     // 最終出力（Gainの出力バッファ）を確認
     let gain_node = engine.nodes.get(&n_gain).unwrap();
     let out_buf_idx = gain_node.out_buffer_indices[0];
-    let out_buf = engine.buffers[out_buf_idx].borrow();
+    let out_buf = &engine.buffers[out_buf_idx];
     
     let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
     
@@ -857,12 +857,12 @@ fn test_process_fan_out() {
     // Gain A の確認
     let gain_a_node = engine.nodes.get(&n_gain_a).unwrap();
     let buf_a_idx = gain_a_node.out_buffer_indices[0];
-    let out_buf_a = engine.buffers[buf_a_idx].borrow();
+    let out_buf_a = &engine.buffers[buf_a_idx];
     assert_eq!(out_buf_a.as_time().unwrap().data, vec![20.0, 40.0]);
 
     // Gain B の確認
     let gain_b_node = engine.nodes.get(&n_gain_b).unwrap();
     let buf_b_idx = gain_b_node.out_buffer_indices[0];
-    let out_buf_b = engine.buffers[buf_b_idx].borrow();
+    let out_buf_b = &engine.buffers[buf_b_idx];
     assert_eq!(out_buf_b.as_time().unwrap().data, vec![5.0, 10.0]);
 }

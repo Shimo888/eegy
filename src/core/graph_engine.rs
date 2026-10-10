@@ -1,4 +1,3 @@
-use std::cell::{Ref, RefCell, RefMut};
 use smallvec::SmallVec;
 use crate::core::processor::Processor;
 use std::collections::BTreeMap;
@@ -13,7 +12,7 @@ pub struct GraphEngine {
     pub(crate) execution_order: Vec<NodeId>,
     pub(crate) next_node_id: NodeId,
     pub(crate) next_edge_id: EdgeId,
-    pub(crate) buffers: Vec<RefCell<Buffer>>,
+    pub(crate) buffers: Vec<Buffer>,
     pub(crate) is_ready: bool,
 }
 
@@ -144,12 +143,12 @@ impl GraphEngine {
     pub fn setup(&mut self) -> Result<(), String>{
         self.is_ready = false;
         let execution_order = self.build_execution_order()?;
-        let buffers  = self.set_up_buffers(&execution_order)?;
+        let mut buffers  = self.set_up_buffers(&execution_order)?;
         
         for node_id in &execution_order{
             let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
 
-            node.with_buffers(&buffers,
+            node.with_buffers(&mut buffers,
                               |processor, inputs, outputs|{
                                   processor.setup(inputs, outputs) })?;
         }
@@ -161,7 +160,7 @@ impl GraphEngine {
     }
     
     // BufferとBufferのIndexの初期化
-    fn set_up_buffers(&mut self, execution_order: &Vec<NodeId>) -> Result<Vec<RefCell<Buffer>>, String>{
+    fn set_up_buffers(&mut self, execution_order: &Vec<NodeId>) -> Result<Vec<Buffer>, String>{
         let mut buffers = Vec::new();
         
         for node_id in execution_order{
@@ -193,7 +192,7 @@ impl GraphEngine {
             // 3: 出力BufferのIdの代入とBufferの確保
             for out_buffer_index in &mut node.out_buffer_indices{
                 *out_buffer_index = buffers.len();
-                buffers.push(RefCell::new(Buffer::None));
+                buffers.push(Buffer::None);
             }
         }
         
@@ -207,7 +206,7 @@ impl GraphEngine {
 
         for node_id in &self.execution_order{
             let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
-            node.with_buffers(&self.buffers, 
+            node.with_buffers(&mut self.buffers, 
                               |processor, inputs, outputs|{ 
                                   processor.process(inputs, outputs)})?;
         }
@@ -297,31 +296,33 @@ impl Node{
 
     fn with_buffers<F>(
         &mut self,
-        buffers: &Vec<RefCell<Buffer>>,
+        buffers: &mut [Buffer],
         mut f: F,
     ) -> Result<(), String>
     where F: FnMut(&mut dyn Processor, &[&Buffer], &mut [&mut Buffer]) -> Result<(), String>,
     {
-        // 1: 入力Refを集める (最大8ポートまでスタック)
-        let input_guards: SmallVec<[Option<Ref<'_, Buffer>>; 8]> = self.in_buffer_indices.iter()
-            .map(|idx| idx.map(|id| buffers[id].borrow()))
-            .collect();
+        // 1: bufferをinputとoutput側で分離する (input_idx<output_idxなので可能) 
+        let n = self.out_buffer_indices.first().copied().unwrap_or(buffers.len());
+        let (prev_buffers, rest_buffers) = buffers.split_at_mut(n);
 
-        // 2: 出力Refを集める (最大8ポートまでスタック)
-        let mut output_guards: SmallVec<[RefMut<'_, Buffer>; 8]> = self.out_buffer_indices.iter()
-            .map(|&idx| buffers[idx].borrow_mut())
-            .collect();
+        // 2: 前半から入力を集める (最大8ポートまでスタック)
+        let mut inputs: SmallVec<[&Buffer; 8]> = SmallVec::new();
+        for idx_opt in &self.in_buffer_indices {
+            if let Some(idx) = idx_opt {
+                inputs.push(&prev_buffers[*idx]);
+            } else {
+                inputs.push(&Buffer::None);
+            }
+        }
 
-        // 3: 入力Bufferを集める
-        let inputs: SmallVec<[&Buffer; 8]> = input_guards.iter()
-            .map(|b| b.as_deref().unwrap_or(&Buffer::None))
-            .collect();
-
-        // 4 出力Bufferを集める
-        let mut outputs: SmallVec<[&mut Buffer; 8]> = output_guards.iter_mut()
-            .map(|x| &mut **x)
-            .collect();
+        // 3: 後半から出力を集める (最大8ポートまでスタック)
+        let num_outputs = self.out_buffer_indices.len();
+        let mut outputs: SmallVec<[&mut Buffer; 8]> = SmallVec::new();
+        for buf in rest_buffers[0..num_outputs].iter_mut() {
+            outputs.push(buf);
+        }
         
+        // 4: 実行する
         f(&mut *self.processor, &inputs, &mut outputs)?;
         Ok(())
     }
