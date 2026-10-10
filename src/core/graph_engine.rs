@@ -1,5 +1,8 @@
+use std::cell::RefCell;
 use crate::core::processor::Processor;
 use std::collections::HashMap;
+use crate::core::buffer::Buffer;
+use crate::core::buffer_manager::BufferManager;
 
 pub type NodeId = usize;
 pub type EdgeId = usize;
@@ -10,6 +13,8 @@ pub struct GraphEngine {
     pub execution_order: Vec<NodeId>,
     pub next_node_id: NodeId,
     pub next_edge_id: EdgeId,
+    pub buffer_manager: BufferManager,
+    pub is_ready: bool,
 }
 
 impl GraphEngine {
@@ -20,10 +25,13 @@ impl GraphEngine {
             execution_order: Vec::new(),
             next_node_id: 1,
             next_edge_id: 1,
+            buffer_manager: BufferManager::new(),
+            is_ready: false,
         }
     }
     
     pub fn add_node(&mut self, processor: Box<dyn Processor>) -> NodeId{
+        self.is_ready = false;
         let node_id = self.next_node_id;
         self.next_node_id += 1;
         
@@ -32,6 +40,7 @@ impl GraphEngine {
     }
     
     pub fn remove_node(&mut self, node_id: NodeId) -> Result<(), String>{
+        self.is_ready = false;
         // 削除に必要なedgeを集める
         let mut target_edges = Vec::new();
         {
@@ -60,7 +69,7 @@ impl GraphEngine {
     }
     
     pub fn connect(&mut self, src_node_id: NodeId, src_port: usize, dst_node_id: NodeId, dst_port:usize) -> Result<EdgeId, String>{
-        // todo: この辺のグラフのバリデーションは別で用意する
+        self.is_ready = false;
         if src_node_id == dst_node_id {
             return Err("Cannot connect node to itself".to_string());
         }
@@ -113,6 +122,7 @@ impl GraphEngine {
     }
     
     pub fn disconnect(&mut self, edge_id: EdgeId) -> Result<(), String>{
+        self.is_ready = false;
         // edgeを削除、なければエラー
         let edge = self.edges.remove(&edge_id).ok_or("Cannot find edge")?;
 
@@ -128,6 +138,90 @@ impl GraphEngine {
             dst_node.in_edges[edge.dst_port] = None;
         }
         Ok(())
+    }
+    
+    /// Graph全体のセットアップ
+    pub fn setup(&mut self) -> Result<(), String>{
+        self.is_ready = false;
+        let execution_order = self.build_execution_order()?;
+        let buffers  = self.set_up_buffers(&execution_order)?;
+        
+        for node_id in &execution_order{
+            let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
+            
+            // 1: 入力Refを集める
+            let input_guards = node.in_buffer_indices.iter()
+                .map(|idx| idx.
+                    map(|id| buffers[id].borrow())) 
+                .collect::<Vec<_>>();
+            
+            // 2: 出力Refを集める
+            let mut output_guards = node.out_buffer_indices.iter()
+                .map(|&idx| buffers[idx].borrow_mut())
+                .collect::<Vec<_>>();
+
+            // 3: 入力Bufferを集める
+            let inputs = input_guards.iter()
+                .map(|b| b.as_deref().unwrap_or(&Buffer::None))
+                .collect::<Vec<_>>();
+            
+            // 4 出力Bufferを集める
+            let mut outputs = output_guards.iter_mut()
+                .map(|x|&mut **x)
+                .collect::<Vec<_>>();
+            
+            // 5: セットアップ
+            node.processor.setup(&inputs, &mut outputs)?;
+        }
+
+        self.execution_order = execution_order;
+        self.buffer_manager.buffers = buffers;
+        self.is_ready = true;
+        Ok(())
+    }
+    
+    // BufferとBufferのIndexの初期化
+    fn set_up_buffers(&mut self, execution_order: &Vec<NodeId>) -> Result<Vec<RefCell<Buffer>>, String>{
+        let mut buffers = Vec::new();
+        
+        for node_id in execution_order{
+            let mut in_buffer_indices = Vec::new();
+            
+            // 1: 入力Bufferのidxを解決
+            let node = self.nodes.get(node_id).ok_or("Cannot find node")?;
+            for (port_num, port) in node.processor.get_input_ports().iter().enumerate() {
+                let edge = node.in_edges[port_num]
+                    .and_then(|edge_id| self.edges.get(&edge_id));
+                
+                // 1.1: 必須ポートがconnectされていなければエラー
+                if !port.optional && edge.is_none() {
+                    return Err(format!("node {} port {} requires inputs", node_id, port_num));
+                }
+                
+                if edge.is_none(){
+                    continue;
+                }
+                
+                let input_buffer_idx = edge.and_then(|edge| { 
+                    self.nodes.get(&edge.src_node)?
+                        .out_buffer_indices.get(edge.src_port).copied()                
+                });
+                
+                in_buffer_indices.push(input_buffer_idx);
+            }
+
+            // 2: 入力BufferのIdの代入
+            let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
+            node.in_buffer_indices = in_buffer_indices;
+
+            // 3: 出力BufferのIdの代入とBufferの確保
+            for out_buffer_index in &mut node.out_buffer_indices{
+                *out_buffer_index = buffers.len();
+                buffers.push(RefCell::new(Buffer::None));
+            }
+        }
+        
+        Ok(buffers)
     }
     
     /// グラフ内の全ノードの依存関係を解析し、実行可能な順序（トポロジカル順）を決定する。
@@ -191,6 +285,8 @@ pub struct Node {
     pub in_edges: Vec<Option<EdgeId>>, 
     pub out_edges: Vec<Vec<EdgeId>>,
     pub processor: Box<dyn Processor>, 
+    pub in_buffer_indices: Vec<Option<usize>>,
+    pub out_buffer_indices: Vec<usize>,
 }
 
 impl Node{
@@ -203,6 +299,8 @@ impl Node{
             processor,
             in_edges: vec![None; num_input],
             out_edges: vec![Vec::new(); num_output],
+            in_buffer_indices: vec![None; num_input],
+            out_buffer_indices: vec![0; num_output],
         }
     }
 }

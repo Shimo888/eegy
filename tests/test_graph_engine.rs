@@ -1,4 +1,4 @@
-use eegy::core::buffer::Buffer;
+use eegy::core::buffer::{Buffer, TimeDomainBuffer};
 use eegy::core::graph_engine::GraphEngine;
 use eegy::core::processor::{IOPort, IOType, Processor, ProcessorMeta};
 use eegy::processors::gain::GainProcessor;
@@ -25,14 +25,54 @@ impl ProcessorMeta for FrequencyDummyProcessor {
     }
 }
 impl Processor for FrequencyDummyProcessor {
-    fn setup(&mut self, _inputs: &[Buffer], _outputs: &mut [Buffer]) -> Result<(), String> {
+    fn setup(&mut self, _inputs: &[&Buffer], _outputs: &mut [&mut Buffer]) -> Result<(), String> {
         Ok(())
     }
 
-    fn process(&mut self, _inputs: &[Buffer], _outputs: &mut [Buffer]) -> Result<(), String> {
+    fn process(&mut self, _inputs: &[&Buffer], _outputs: &mut [&mut Buffer]) -> Result<(), String> {
         Ok(())
     }
 }
+// 信号源（ソース）テスト用のダミープロセッサ（常に保持しているバッファを出力する）
+struct SourceDummyProcessor {
+    output_buffer: Buffer,
+}
+impl SourceDummyProcessor {
+    fn new(output_buffer: Buffer) -> Self {
+        Self { output_buffer }
+    }
+}
+impl ProcessorMeta for SourceDummyProcessor {
+    fn get_type(&self) -> &'static str {
+        "SourceDummy"
+    }
+    fn get_input_ports(&self) -> &'static [IOPort] {
+        &[] // 入力ポートなし（最上流のソース）
+    }
+    fn get_output_ports(&self) -> &'static [IOPort] {
+        &[IOPort {
+            name: "signal_out",
+            optional: false,
+            types: &[IOType::Time],
+        }]
+    }
+}
+impl Processor for SourceDummyProcessor {
+    fn setup(&mut self, _inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
+        if let Some(out) = outputs.get_mut(0) {
+            **out = self.output_buffer.clone();
+        }
+        Ok(())
+    }
+
+    fn process(&mut self, _inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
+        if let Some(out) = outputs.get_mut(0) {
+            **out = self.output_buffer.clone();
+        }
+        Ok(())
+    }
+}
+
 
 // ==========================================
 // 1. add_node / 基本テスト
@@ -497,3 +537,132 @@ fn test_execution_order_long_cycle_detected() {
     assert!(res.is_err());
 }
 
+//// ==========================================
+// 6. setup テスト
+// ==========================================
+
+/// 直列パイプラインのバッファ伝播テスト:
+/// - Source -> Gain1 -> Gain2 の構成で setup() を実行したとき、
+///   Source の持つバッファ仕様（2ch, 250Hz, 3サンプル）が下流の全ノードの出力バッファに伝播・初期化されること
+#[test]
+fn test_setup_linear_pipeline_buffer_propagation() {
+    let mut engine = GraphEngine::new();
+
+    // 信号源バッファ（2ch, 250Hz, 3サンプル）
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 3,
+        channels: vec!["Ch1".to_string(), "Ch2".to_string()],
+        sampling_rate: 250.0,
+        data: vec![0.0; 6],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    let n_gain1 = engine.add_node(Box::new(GainProcessor::new(2.0)));
+    let n_gain2 = engine.add_node(Box::new(GainProcessor::new(0.5)));
+
+    // Source:0 -> Gain1:0 -> Gain2:0
+    engine.connect(n_source, 0, n_gain1, 0).unwrap();
+    engine.connect(n_gain1, 0, n_gain2, 0).unwrap();
+
+    // グラフ全体を setup！
+    assert!(engine.setup().is_ok());
+
+    // 末尾の Gain2 の出力バッファを確認
+    let gain2_node = engine.nodes.get(&n_gain2).unwrap();
+    let buf_idx = gain2_node.out_buffer_indices[0];
+    let out_buf = &engine.buffer_manager.buffers[buf_idx].borrow();
+    let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
+
+    assert_eq!(time_buf.sampling_rate, 250.0);
+    assert_eq!(time_buf.num_samples, 3);
+    assert_eq!(time_buf.channels, vec!["Ch1", "Ch2"]);
+}
+
+/// 分岐接続（Fan-out）のバッファ伝播テスト:
+/// - 1つの Source から 2つの Gain に分岐している場合、両方の Gain の出力バッファが正常に初期化されること
+#[test]
+fn test_setup_fan_out() {
+    let mut engine = GraphEngine::new();
+
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 4,
+        channels: vec!["Cz".to_string()],
+        sampling_rate: 500.0,
+        data: vec![0.0; 4],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    let n_gain_a = engine.add_node(Box::new(GainProcessor::new(1.0)));
+    let n_gain_b = engine.add_node(Box::new(GainProcessor::new(2.0)));
+
+    engine.connect(n_source, 0, n_gain_a, 0).unwrap();
+    engine.connect(n_source, 0, n_gain_b, 0).unwrap();
+
+    assert!(engine.setup().is_ok());
+
+    // 両方のノードが親のサンプリングレート 500.0Hz で初期化されていること
+    let node_a = engine.nodes.get(&n_gain_a).unwrap();
+    let buf_a_idx = node_a.out_buffer_indices[0];
+    assert_eq!(engine.buffer_manager.buffers[buf_a_idx].borrow().as_time().unwrap().sampling_rate, 500.0);
+
+    let node_b = engine.nodes.get(&n_gain_b).unwrap();
+    let buf_b_idx = node_b.out_buffer_indices[0];
+    assert_eq!(engine.buffer_manager.buffers[buf_b_idx].borrow().as_time().unwrap().sampling_rate, 500.0);
+}
+
+/// 必須入力ポート未接続の拒絶テスト:
+/// - optional: false の入力ポートを持つノード（GainProcessor の signal_in）に
+///   エッジが接続されていない状態で setup() を呼んだ場合、エラーになること
+#[test]
+fn test_setup_missing_required_input() {
+    let mut engine = GraphEngine::new();
+
+    // GainProcessor は入力ポート 0 (signal_in) が必須（optional: false）
+    let _n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+
+    // 何も接続せずに setup() を呼ぶとエラーになるはず
+    let res = engine.setup();
+    assert!(res.is_err());
+}
+
+/// 循環参照グラフのセットアップ拒絶テスト:
+/// - ループが存在するグラフで setup() を呼んだ場合、トポロジカルソートで検知されてエラーになること
+#[test]
+fn test_setup_cyclic_graph_fails() {
+    let mut engine = GraphEngine::new();
+    let n1 = engine.add_node(Box::new(GainProcessor::new(1.0)));
+    let n2 = engine.add_node(Box::new(GainProcessor::new(1.0)));
+
+    // n1 -> n2 -> n1 ループ
+    engine.connect(n1, 0, n2, 0).unwrap();
+    engine.connect(n2, 0, n1, 0).unwrap();
+
+    let res = engine.setup();
+    assert!(res.is_err());
+}
+
+/// 任意（optional: true）ポート未接続時のセットアップ成功テスト:
+/// - GainProcessor の gain_in (ポート1) は optional: true なので、
+///   ポート0（signal_in）さえ接続されていれば setup() が成功すること
+#[test]
+fn test_setup_with_unconnected_optional_port() {
+    let mut engine = GraphEngine::new();
+
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 2,
+        channels: vec!["Fz".to_string()],
+        sampling_rate: 100.0,
+        data: vec![0.0; 2],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    let n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+
+    // ポート0（必須）のみ接続し、ポート1（任意）は未接続
+    engine.connect(n_source, 0, n_gain, 0).unwrap();
+
+    assert!(engine.setup().is_ok());
+}

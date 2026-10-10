@@ -1,8 +1,8 @@
 use crate::core::buffer::Buffer;
 
-pub trait Processor : ProcessorMeta{
-    fn setup(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String>;
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String>;
+pub trait Processor: ProcessorMeta{
+    fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
+    fn process(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
 }
 
 pub trait ProcessorMeta{
@@ -20,6 +20,7 @@ pub struct IOPort{
 
 #[derive(Clone,Debug,PartialEq)]
 pub enum IOType {
+    None,
     Time,
     Frequency,
     TimeFrequency,

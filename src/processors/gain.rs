@@ -14,14 +14,14 @@ impl GainProcessor {
 }
 
 impl Processor for GainProcessor {
-    fn setup(&mut self, inputs: &[Buffer], outputs: &mut[Buffer]) -> Result<(), String> {
+    fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String> {
         let input = inputs.get(0).ok_or("input 0 is required")?;
         let output = outputs.get_mut(0).ok_or("output 0 is required")?;
-        *output = input.clone();
+        **output = (**input).clone();
         Ok(())
     }
 
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) -> Result<(), String> {
+    fn process(&mut self, inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
         let input_signal = inputs.first()
             .and_then(|input| input.as_time())
             .ok_or("Input 0 is missing or not TimeDomain")?;
@@ -79,11 +79,12 @@ mod tests {
             sampling_rate: 250.0,
             data: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
         });
+        let mut output_buffer = Buffer::None; 
 
         let mut gain_node = GainProcessor::new(2.0);
 
-        let inputs = vec![input_buffer];
-        let mut outputs = vec![Buffer::None]; 
+        let inputs = vec![&input_buffer];
+        let mut outputs = vec![&mut output_buffer]; 
         
         assert!(gain_node.setup(&inputs, &mut outputs).is_ok());
         assert!(gain_node.process(&inputs, &mut outputs).is_ok());
