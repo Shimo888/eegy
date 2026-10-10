@@ -1,4 +1,5 @@
 pub mod buffer;
 pub mod processor;
 pub mod graph_engine;
-mod buffer_manager;
+#[cfg(test)]
+mod test_graph_engine;

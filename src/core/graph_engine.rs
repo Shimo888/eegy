@@ -3,19 +3,18 @@ use smallvec::SmallVec;
 use crate::core::processor::Processor;
 use std::collections::HashMap;
 use crate::core::buffer::Buffer;
-use crate::core::buffer_manager::BufferManager;
 
 pub type NodeId = usize;
 pub type EdgeId = usize;
 
 pub struct GraphEngine {
-    pub nodes: HashMap<NodeId, Node>,
-    pub edges: HashMap<EdgeId, Edge>,
-    pub execution_order: Vec<NodeId>,
-    pub next_node_id: NodeId,
-    pub next_edge_id: EdgeId,
-    pub buffer_manager: BufferManager,
-    pub is_ready: bool,
+    pub(crate) nodes: HashMap<NodeId, Node>,
+    pub(crate) edges: HashMap<EdgeId, Edge>,
+    pub(crate) execution_order: Vec<NodeId>,
+    pub(crate) next_node_id: NodeId,
+    pub(crate) next_edge_id: EdgeId,
+    pub(crate) buffers: Vec<RefCell<Buffer>>,
+    pub(crate) is_ready: bool,
 }
 
 impl GraphEngine {
@@ -26,7 +25,7 @@ impl GraphEngine {
             execution_order: Vec::new(),
             next_node_id: 1,
             next_edge_id: 1,
-            buffer_manager: BufferManager::new(),
+            buffers: Vec::new(),
             is_ready: false,
         }
     }
@@ -156,7 +155,7 @@ impl GraphEngine {
         }
 
         self.execution_order = execution_order;
-        self.buffer_manager.buffers = buffers;
+        self.buffers = buffers;
         self.is_ready = true;
         Ok(())
     }
@@ -208,7 +207,7 @@ impl GraphEngine {
 
         for node_id in &self.execution_order{
             let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
-            node.with_buffers(&self.buffer_manager.buffers, 
+            node.with_buffers(&self.buffers, 
                               |processor, inputs, outputs|{ 
                                   processor.process(inputs, outputs)})?;
         }
@@ -273,12 +272,12 @@ impl GraphEngine {
 }
 
 pub struct Node {
-    pub node_id: usize,
-    pub in_edges: Vec<Option<EdgeId>>, 
-    pub out_edges: Vec<Vec<EdgeId>>,
-    pub processor: Box<dyn Processor>, 
-    pub in_buffer_indices: Vec<Option<usize>>,
-    pub out_buffer_indices: Vec<usize>,
+    pub(crate) node_id: usize,
+    pub(crate) in_edges: Vec<Option<EdgeId>>, 
+    pub(crate) out_edges: Vec<Vec<EdgeId>>,
+    pub(crate) processor: Box<dyn Processor>, 
+    pub(crate) in_buffer_indices: Vec<Option<usize>>,
+    pub(crate) out_buffer_indices: Vec<usize>,
 }
 
 impl Node{
@@ -330,9 +329,9 @@ impl Node{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Edge{
-    pub id: EdgeId,
-    pub src_node: NodeId,
-    pub src_port: usize,
-    pub dst_node: NodeId,
-    pub dst_port: usize,
+    pub(crate) id: EdgeId,
+    pub(crate) src_node: NodeId,
+    pub(crate) src_port: usize,
+    pub(crate) dst_node: NodeId,
+    pub(crate) dst_port: usize,
 }
