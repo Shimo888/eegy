@@ -73,6 +73,67 @@ impl Processor for SourceDummyProcessor {
     }
 }
 
+// 任意ポートテスト用のダミープロセッサ
+// - 入力: ポート0（任意）/ ポート1（必須）/ ポート2（任意）
+// - 出力: ポート1 の入力をそのままコピー
+// - inputs[i] がポート i に対応していない場合はエラーを返す
+struct OptionalInputDummyProcessor;
+impl OptionalInputDummyProcessor {
+    fn copy_required_input(inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
+        if inputs.len() != 3 {
+            return Err(format!("expected 3 inputs (one per port), got {}", inputs.len()));
+        }
+        if *inputs[0] != Buffer::None || *inputs[2] != Buffer::None {
+            return Err("unconnected optional ports must be Buffer::None".to_string());
+        }
+        if inputs[1].as_time().is_none() {
+            return Err("input port 1 must be TimeDomainBuffer".to_string());
+        }
+        let out = outputs.get_mut(0).ok_or("output 0 is required")?;
+        **out = inputs[1].clone();
+        Ok(())
+    }
+}
+impl ProcessorMeta for OptionalInputDummyProcessor {
+    fn get_type(&self) -> &'static str {
+        "OptionalInputDummy"
+    }
+    fn get_input_ports(&self) -> &'static [IOPort] {
+        &[
+            IOPort {
+                name: "optional_head",
+                optional: true,
+                types: &[IOType::Time],
+            },
+            IOPort {
+                name: "required",
+                optional: false,
+                types: &[IOType::Time],
+            },
+            IOPort {
+                name: "optional_tail",
+                optional: true,
+                types: &[IOType::Time],
+            },
+        ]
+    }
+    fn get_output_ports(&self) -> &'static [IOPort] {
+        &[IOPort {
+            name: "output",
+            optional: false,
+            types: &[IOType::Time],
+        }]
+    }
+}
+impl Processor for OptionalInputDummyProcessor {
+    fn setup(&mut self, inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
+        Self::copy_required_input(inputs, outputs)
+    }
+
+    fn process(&mut self, inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
+        Self::copy_required_input(inputs, outputs)
+    }
+}
 
 // ==========================================
 // 1. add_node / 基本テスト
@@ -644,8 +705,10 @@ fn test_setup_cyclic_graph_fails() {
 }
 
 /// 任意（optional: true）ポート未接続時のセットアップ成功テスト:
-/// - GainProcessor の gain_in (ポート1) は optional: true なので、
-///   ポート0（signal_in）さえ接続されていれば setup() が成功すること
+/// - OptionalInputDummyProcessor（ポート0: 任意 / ポート1: 必須 / ポート2: 任意）の
+///   必須ポート1のみを接続した状態で setup() / process() が成功すること
+/// - 未接続の任意ポートが詰められず、inputs[i] がポート i に対応していること
+///   （inputs.len() == 3、inputs[0] / inputs[2] が Buffer::None、inputs[1] が上流の出力）
 #[test]
 fn test_setup_with_unconnected_optional_port() {
     let mut engine = GraphEngine::new();
@@ -655,16 +718,46 @@ fn test_setup_with_unconnected_optional_port() {
         num_samples: 2,
         channels: vec!["Fz".to_string()],
         sampling_rate: 100.0,
-        data: vec![0.0; 2],
+        data: vec![1.0, 2.0],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer.clone())));
+    let n_opt = engine.add_node(Box::new(OptionalInputDummyProcessor));
+
+    // ポート1（必須）のみ接続し、ポート0・ポート2（任意）は未接続
+    engine.connect(n_source, 0, n_opt, 1).unwrap();
+
+    // ポート対応がずれていれば OptionalInputDummyProcessor がエラーを返す
+    engine.setup().expect("setup should succeed with unconnected optional ports");
+    engine.process().expect("process should succeed with unconnected optional ports");
+
+    // ポート1の入力がそのまま出力されていること
+    let node = engine.nodes.get(&n_opt).unwrap();
+    let out_buf = engine.buffer_manager.buffers[node.out_buffer_indices[0]].borrow();
+    assert_eq!(*out_buf, source_buffer);
+}
+
+/// 必須ポート未接続時の拒絶テスト（任意ポートのみ接続）:
+/// - OptionalInputDummyProcessor の任意ポート0のみを接続し、必須ポート1が未接続の場合、
+///   setup() がエラーになること
+#[test]
+fn test_setup_only_optional_port_connected_fails() {
+    let mut engine = GraphEngine::new();
+
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 2,
+        channels: vec!["Fz".to_string()],
+        sampling_rate: 100.0,
+        data: vec![1.0, 2.0],
     });
 
     let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
-    let n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+    let n_opt = engine.add_node(Box::new(OptionalInputDummyProcessor));
 
-    // ポート0（必須）のみ接続し、ポート1（任意）は未接続
-    engine.connect(n_source, 0, n_gain, 0).unwrap();
+    engine.connect(n_source, 0, n_opt, 0).unwrap();
 
-    assert!(engine.setup().is_ok());
+    assert!(engine.setup().is_err());
 }
 
 // ==========================================

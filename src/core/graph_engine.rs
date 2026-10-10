@@ -179,10 +179,6 @@ impl GraphEngine {
                     return Err(format!("node {} port {} requires inputs", node_id, port_num));
                 }
                 
-                if edge.is_none(){
-                    continue;
-                }
-                
                 let input_buffer_idx = edge.and_then(|edge| { 
                     self.nodes.get(&edge.src_node)?
                         .out_buffer_indices.get(edge.src_port).copied()                
