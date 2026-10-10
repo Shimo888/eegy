@@ -1,15 +1,15 @@
 use std::cell::{Ref, RefCell, RefMut};
 use smallvec::SmallVec;
 use crate::core::processor::Processor;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use crate::core::buffer::Buffer;
 
 pub type NodeId = usize;
 pub type EdgeId = usize;
 
 pub struct GraphEngine {
-    pub(crate) nodes: HashMap<NodeId, Node>,
-    pub(crate) edges: HashMap<EdgeId, Edge>,
+    pub(crate) nodes: BTreeMap<NodeId, Node>,
+    pub(crate) edges: BTreeMap<EdgeId, Edge>,
     pub(crate) execution_order: Vec<NodeId>,
     pub(crate) next_node_id: NodeId,
     pub(crate) next_edge_id: EdgeId,
@@ -20,8 +20,8 @@ pub struct GraphEngine {
 impl GraphEngine {
     pub fn new() -> Self {
         Self{
-            nodes: HashMap::new(),
-            edges: HashMap::new(),
+            nodes: BTreeMap::new(),
+            edges: BTreeMap::new(),
             execution_order: Vec::new(),
             next_node_id: 1,
             next_edge_id: 1,
@@ -223,7 +223,7 @@ impl GraphEngine {
     /// - `Err(String)`: グラフ内に循環参照（ループ）が検知された場合。
     pub fn build_execution_order(&self) -> Result<Vec<NodeId>, String>{
 
-        let mut input_nums = HashMap::new();
+        let mut input_nums = BTreeMap::new();
         let mut execution_queue = Vec::new();
         let mut execution_order = Vec::new();
         
