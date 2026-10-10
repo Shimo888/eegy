@@ -666,3 +666,118 @@ fn test_setup_with_unconnected_optional_port() {
 
     assert!(engine.setup().is_ok());
 }
+
+// ==========================================
+// 6. process テスト
+// ==========================================
+
+/// setup() 実行前に process() を呼ぶとエラーになることのテスト
+#[test]
+fn test_process_fails_if_not_ready() {
+    let mut engine = GraphEngine::new();
+    let _n_gain = engine.add_node(Box::new(GainProcessor::new(1.0)));
+    // setup() を呼んでいないので is_ready = false のはず
+    let res = engine.process();
+    assert!(res.is_err());
+    assert!(res.unwrap_err().contains("not ready")); // エラーメッセージに "ready" や "setup" が含まれることを期待
+}
+
+/// グラフ変更時に is_ready が false になり、再度 setup() するまで process() が失敗するテスト
+#[test]
+fn test_process_fails_after_graph_mutation() {
+    let mut engine = GraphEngine::new();
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 4,
+        channels: vec!["Ch1".to_string()],
+        sampling_rate: 100.0,
+        data: vec![1.0, 2.0, 3.0, 4.0],
+    });
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    let n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+    engine.connect(n_source, 0, n_gain, 0).unwrap();
+    
+    // 1回目の setup() で準備完了
+    assert!(engine.setup().is_ok());
+    
+    // 新しいノードを追加してグラフを変更（is_ready が false になるはず）
+    engine.add_node(Box::new(GainProcessor::new(1.0)));
+    
+    let res = engine.process();
+    assert!(res.is_err());
+}
+
+/// 直列パイプライン（Source -> Gain）での信号伝播テスト:
+/// - Sourceノードが出力した波形データが、Gainノードに渡り、Gainが適用された結果が出力バッファに書き込まれること
+#[test]
+fn test_process_linear_pipeline() {
+    let mut engine = GraphEngine::new();
+
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 4,
+        channels: vec!["Ch1".to_string()],
+        sampling_rate: 100.0,
+        // 初期データ
+        data: vec![1.0, 2.0, 3.0, 4.0],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    // Gain=2.0 なので、2倍されるはず
+    let n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+
+    engine.connect(n_source, 0, n_gain, 0).unwrap();
+    engine.setup().unwrap();
+
+    // 実行！
+    engine.process().unwrap();
+
+    // 最終出力（Gainの出力バッファ）を確認
+    let gain_node = engine.nodes.get(&n_gain).unwrap();
+    let out_buf_idx = gain_node.out_buffer_indices[0];
+    let out_buf = engine.buffer_manager.buffers[out_buf_idx].borrow();
+    
+    let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
+    
+    // 入力が [1.0, 2.0, 3.0, 4.0] でゲインが 2.0 なので、[2.0, 4.0, 6.0, 8.0] になっているはず
+    assert_eq!(time_buf.data, vec![2.0, 4.0, 6.0, 8.0]);
+}
+
+/// 分岐（Fan-out）での信号伝播テスト:
+/// - 1つのSourceから、Gain A (x2.0) と Gain B (x0.5) に分岐。
+/// - それぞれ独立したバッファに正しい計算結果が書き込まれること。
+#[test]
+fn test_process_fan_out() {
+    let mut engine = GraphEngine::new();
+
+    let source_buffer = Buffer::Time(TimeDomainBuffer {
+        first_packet_num: 1,
+        num_samples: 2,
+        channels: vec!["Ch1".to_string()],
+        sampling_rate: 100.0,
+        data: vec![10.0, 20.0],
+    });
+
+    let n_source = engine.add_node(Box::new(SourceDummyProcessor::new(source_buffer)));
+    let n_gain_a = engine.add_node(Box::new(GainProcessor::new(2.0)));  // x2.0
+    let n_gain_b = engine.add_node(Box::new(GainProcessor::new(0.5)));  // x0.5
+
+    engine.connect(n_source, 0, n_gain_a, 0).unwrap();
+    engine.connect(n_source, 0, n_gain_b, 0).unwrap();
+    engine.setup().unwrap();
+
+    // 実行！
+    engine.process().unwrap();
+
+    // Gain A の確認
+    let gain_a_node = engine.nodes.get(&n_gain_a).unwrap();
+    let buf_a_idx = gain_a_node.out_buffer_indices[0];
+    let out_buf_a = engine.buffer_manager.buffers[buf_a_idx].borrow();
+    assert_eq!(out_buf_a.as_time().unwrap().data, vec![20.0, 40.0]);
+
+    // Gain B の確認
+    let gain_b_node = engine.nodes.get(&n_gain_b).unwrap();
+    let buf_b_idx = gain_b_node.out_buffer_indices[0];
+    let out_buf_b = engine.buffer_manager.buffers[buf_b_idx].borrow();
+    assert_eq!(out_buf_b.as_time().unwrap().data, vec![5.0, 10.0]);
+}

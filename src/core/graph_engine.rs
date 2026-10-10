@@ -224,6 +224,42 @@ impl GraphEngine {
         Ok(buffers)
     }
     
+    pub fn process(&mut self) -> Result<(), String>{
+        if !self.is_ready{
+            return Err("not ready".to_string());
+        }
+
+        for node_id in &self.execution_order{
+            let node = self.nodes.get_mut(node_id).ok_or("Cannot find node")?;
+
+            // 1: 入力Refを集める
+            let input_guards = node.in_buffer_indices.iter()
+                .map(|idx| idx.
+                    map(|id| self.buffer_manager.buffers[id].borrow()))
+                .collect::<Vec<_>>();
+
+            // 2: 出力Refを集める
+            let mut output_guards = node.out_buffer_indices.iter()
+                .map(|&idx| self.buffer_manager.buffers[idx].borrow_mut())
+                .collect::<Vec<_>>();
+
+            // 3: 入力Bufferを集める
+            let inputs = input_guards.iter()
+                .map(|b| b.as_deref().unwrap_or(&Buffer::None))
+                .collect::<Vec<_>>();
+
+            // 4 出力Bufferを集める
+            let mut outputs = output_guards.iter_mut()
+                .map(|x|&mut **x)
+                .collect::<Vec<_>>();
+
+            // 5: 実行
+            node.processor.process(&inputs, &mut outputs)?;
+        }
+ 
+        Ok(())
+    }
+    
     /// グラフ内の全ノードの依存関係を解析し、実行可能な順序（トポロジカル順）を決定する。
     /// # アルゴリズム
     /// Kahn（カーン）のアルゴリズムを用いてトポロジカルソートを行う。
