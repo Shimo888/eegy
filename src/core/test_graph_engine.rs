@@ -612,7 +612,6 @@ fn test_setup_linear_pipeline_buffer_propagation() {
     // 信号源バッファ（2ch, 250Hz, 3サンプル）
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 3,
         channels: vec!["Ch1".to_string(), "Ch2".to_string()],
         sampling_rate: 250.0,
         data: vec![0.0; 6],
@@ -636,7 +635,6 @@ fn test_setup_linear_pipeline_buffer_propagation() {
     let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
 
     assert_eq!(time_buf.sampling_rate, 250.0);
-    assert_eq!(time_buf.num_samples, 3);
     assert_eq!(time_buf.channels, vec!["Ch1", "Ch2"]);
 }
 
@@ -648,7 +646,6 @@ fn test_setup_fan_out() {
 
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 4,
         channels: vec!["Cz".to_string()],
         sampling_rate: 500.0,
         data: vec![0.0; 4],
@@ -715,7 +712,6 @@ fn test_setup_with_unconnected_optional_port() {
 
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 2,
         channels: vec!["Fz".to_string()],
         sampling_rate: 100.0,
         data: vec![1.0, 2.0],
@@ -746,7 +742,6 @@ fn test_setup_only_optional_port_connected_fails() {
 
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 2,
         channels: vec!["Fz".to_string()],
         sampling_rate: 100.0,
         data: vec![1.0, 2.0],
@@ -781,7 +776,6 @@ fn test_process_fails_after_graph_mutation() {
     let mut engine = GraphEngine::new();
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 4,
         channels: vec!["Ch1".to_string()],
         sampling_rate: 100.0,
         data: vec![1.0, 2.0, 3.0, 4.0],
@@ -808,7 +802,6 @@ fn test_process_linear_pipeline() {
 
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 4,
         channels: vec!["Ch1".to_string()],
         sampling_rate: 100.0,
         // 初期データ
@@ -845,7 +838,6 @@ fn test_process_fan_out() {
 
     let source_buffer = Buffer::Time(TimeDomainBuffer {
         first_packet_num: 1,
-        num_samples: 2,
         channels: vec!["Ch1".to_string()],
         sampling_rate: 100.0,
         data: vec![10.0, 20.0],

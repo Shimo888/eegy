@@ -74,7 +74,6 @@ mod tests {
     fn test_gain_process() {
         let input_buffer = Buffer::Time(TimeDomainBuffer {
             first_packet_num: 100,
-            num_samples: 3,
             channels: vec!["Fp1".to_string(), "Fp2".to_string()],
             sampling_rate: 250.0,
             data: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
