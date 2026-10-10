@@ -8,5 +8,5 @@ You can install this package via the Unity Package Manager (UPM).
 3. Enter the following URL and click `Add`:
 
 ```text
-[https://github.com/Shimo888/eegy.git?path=eegy-unity/Assets/Eegy](https://github.com/Shimo888/eegy.git?path=eegy-unity/Assets/Eegy)
+https://github.com/Shimo888/eegy.git?path=eegy-unity/Assets/Eegy
 ```
