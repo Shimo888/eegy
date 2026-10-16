@@ -1,5 +1,6 @@
 // TODO: 将来 Unity 連携を本格実装する際は、FFI 処理とこの build.rs を `crates/eegy-ffi` クレートへ分離する。
 pub fn main() {
+    println!("cargo:rerun-if-changed=src");
     csbindgen::Builder::default()
         .input_extern_file("src/lib.rs")
         .csharp_dll_name("eegy")

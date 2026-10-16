@@ -291,6 +291,12 @@ impl GraphEngine {
         self.nodes.get(&node_id).map(|node| &*node.processor)
     }
 
+    pub fn get_processor_mut(&mut self, node_id: NodeId) -> Option<&mut dyn Processor> {
+        self.is_ready = false;
+        let node = self.nodes.get_mut(&node_id)?;
+        Some(&mut *node.processor)
+    }
+
     pub fn get_edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.values()
     }
