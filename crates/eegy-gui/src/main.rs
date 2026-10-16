@@ -80,7 +80,7 @@ impl eframe::App for EegyApp {
                     });
 
                 // メインのノードキャンバス領域
-                self.node_editor.show(ui, &self.engine);
+                self.node_editor.show(ui, &mut self.engine);
             });
     }
 }
