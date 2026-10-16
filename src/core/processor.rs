@@ -1,9 +1,11 @@
 use crate::core::buffer::Buffer;
 
-pub trait Processor: ProcessorMeta{
+pub trait Processor: ProcessorMeta + erased_serde::Serialize {
     fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
     fn process(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
 }
+
+erased_serde::serialize_trait_object!(Processor);
 
 pub trait ProcessorMeta{
     fn get_type(&self) -> &'static str;

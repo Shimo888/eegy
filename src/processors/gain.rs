@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
 use crate::core::processor::{IOPort, IOType, Processor, ProcessorMeta};
 use crate::core::buffer::{Buffer};
 
+#[derive(Serialize, Deserialize)]
 pub struct GainProcessor {
     gain: f64,
 }

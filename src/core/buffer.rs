@@ -1,5 +1,6 @@
-#[derive(Clone,Debug,PartialEq)]
+#[derive(Clone,Debug,PartialEq, Default)]
 pub enum Buffer {
+    #[default]
     None,
     Time(TimeDomainBuffer),
     Frequency(FrequencyDomainBuffer),

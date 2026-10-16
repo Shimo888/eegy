@@ -1,9 +1,11 @@
+use serde::{Deserialize, Serialize};
 use crate::core::buffer::{Buffer, TimeDomainBuffer};
 use crate::core::graph_engine::GraphEngine;
 use crate::core::processor::{IOPort, IOType, Processor, ProcessorMeta};
 use crate::processors::gain::GainProcessor;
 
 // 型不一致テスト用のダミープロセッサ（周波数領域専用）
+#[derive(Serialize, Deserialize)]
 struct FrequencyDummyProcessor;
 impl ProcessorMeta for FrequencyDummyProcessor {
     fn get_type(&self) -> &'static str {
@@ -34,7 +36,9 @@ impl Processor for FrequencyDummyProcessor {
     }
 }
 // 信号源（ソース）テスト用のダミープロセッサ（常に保持しているバッファを出力する）
+#[derive(Serialize, Deserialize)]
 struct SourceDummyProcessor {
+    #[serde(skip)]
     output_buffer: Buffer,
 }
 impl SourceDummyProcessor {
@@ -77,6 +81,7 @@ impl Processor for SourceDummyProcessor {
 // - 入力: ポート0（任意）/ ポート1（必須）/ ポート2（任意）
 // - 出力: ポート1 の入力をそのままコピー
 // - inputs[i] がポート i に対応していない場合はエラーを返す
+#[derive(Serialize, Deserialize)]
 struct OptionalInputDummyProcessor;
 impl OptionalInputDummyProcessor {
     fn copy_required_input(inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {

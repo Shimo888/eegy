@@ -30,12 +30,21 @@ impl GraphEngine {
     }
     
     pub fn add_node(&mut self, processor: Box<dyn Processor>) -> NodeId{
-        self.is_ready = false;
         let node_id = self.next_node_id;
-        self.next_node_id += 1;
+        self.add_node_with_id(node_id, processor).unwrap()
+    }
+
+    pub(crate) fn add_node_with_id(&mut self, node_id: NodeId, processor: Box<dyn Processor>) -> Result<NodeId, String>{
+        if self.nodes.contains_key(&node_id) {
+            return Err(format!("duplicate node with id {}", node_id));
+        }
+        self.is_ready = false;
+        if node_id >= self.next_node_id {
+            self.next_node_id = node_id + 1;
+        }
         
         self.nodes.insert(node_id, Node::new(node_id, processor));
-        node_id
+        Ok(node_id)
     }
     
     pub fn remove_node(&mut self, node_id: NodeId) -> Result<(), String>{
@@ -68,7 +77,15 @@ impl GraphEngine {
     }
     
     pub fn connect(&mut self, src_node_id: NodeId, src_port: usize, dst_node_id: NodeId, dst_port:usize) -> Result<EdgeId, String>{
+        let edge_id = self.next_edge_id;
+        self.connect_with_id(edge_id, src_node_id, src_port, dst_node_id, dst_port)
+    }
+
+    pub(crate) fn connect_with_id(&mut self, edge_id: EdgeId, src_node_id: NodeId, src_port: usize, dst_node_id: NodeId, dst_port:usize) -> Result<EdgeId, String>{
         self.is_ready = false;
+        if self.edges.contains_key(&edge_id) {
+            return Err(format!("duplicate edge id: {}", edge_id));
+        }
         if src_node_id == dst_node_id {
             return Err("Cannot connect node to itself".to_string());
         }
@@ -95,8 +112,9 @@ impl GraphEngine {
         }
 
         // 存在していればEdgeを作成
-        let edge_id = self.next_edge_id;
-        self.next_edge_id += 1;
+        if edge_id >= self.next_edge_id {
+            self.next_edge_id = edge_id + 1;
+        }
         self.edges.insert(edge_id, Edge{
             id: edge_id,
             src_node: src_node_id,
@@ -271,7 +289,7 @@ impl GraphEngine {
 }
 
 pub struct Node {
-    pub(crate) node_id: usize,
+    pub(crate) node_id: NodeId,
     pub(crate) in_edges: Vec<Option<EdgeId>>, 
     pub(crate) out_edges: Vec<Vec<EdgeId>>,
     pub(crate) processor: Box<dyn Processor>, 
