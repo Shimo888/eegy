@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 smallvec = "1.16.3"
 serde = { version = "1.0.229", features = ["derive"] }
 erased-serde = "0.4.10"
+serde_json = "1.0.154"
 
 [build-dependencies]
 csbindgen = "1.9.8"
