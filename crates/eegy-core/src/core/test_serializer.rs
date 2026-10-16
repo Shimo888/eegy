@@ -13,7 +13,7 @@ use crate::processors::gain::GainProcessor;
 /// 信号源（ソース）用のテストプロセッサ
 /// - 入力ポートなし、Time領域の出力ポート1つ
 /// - 固定の初期信号（[1.0, 2.0, 3.0]）を生成する
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 struct ConstantSourceProcessor {
     value_scale: f64,
 }
@@ -57,7 +57,7 @@ impl Processor for ConstantSourceProcessor {
 }
 
 /// 2入力1出力の加算テストプロセッサ（複数ポート・合流トポロジー検証用）
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 struct AddProcessor;
 impl ProcessorMeta for AddProcessor {
     fn get_type(&self) -> &'static str {
@@ -103,7 +103,7 @@ impl Processor for AddProcessor {
 }
 
 /// 周波数領域専用のダミープロセッサ（ポート型不一致テスト用）
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 struct FrequencyDummyProcessor;
 impl ProcessorMeta for FrequencyDummyProcessor {
     fn get_type(&self) -> &'static str {

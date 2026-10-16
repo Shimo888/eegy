@@ -5,6 +5,7 @@ use eframe::egui::{
 };
 use eegy::core::graph_engine::{GraphEngine, NodeId};
 use eegy::core::processor::IOType;
+use eegy::core::registry::Registry;
 
 /// ドラッグ中のワイヤーの起点情報
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -26,6 +27,8 @@ pub struct NodeEditor {
     selected_node: Option<NodeId>,
     /// 現在マウスドラッグで配線中のワイヤー起点
     dragging_wire: Option<DragSource>,
+    /// キャンバス右クリック時のローカル座標（ノード生成位置）
+    context_menu_pos: Pos2,
 }
 
 impl NodeEditor {
@@ -42,6 +45,7 @@ impl NodeEditor {
             pan_offset: Vec2::ZERO,
             selected_node: None,
             dragging_wire: None,
+            context_menu_pos: Pos2::ZERO,
         }
     }
 
@@ -50,12 +54,22 @@ impl NodeEditor {
         self.node_positions.insert(node_id, pos);
     }
 
+    /// ノードを GraphEngine と UI 座標マップの両方から削除する
+    pub fn delete_node(&mut self, engine: &mut GraphEngine, node_id: NodeId) {
+        let _ = engine.remove_node(node_id);
+        self.node_positions.remove(&node_id);
+        if self.selected_node == Some(node_id) {
+            self.selected_node = None;
+        }
+        self.dragging_wire = None;
+    }
+
     pub fn selected_node(&self) -> Option<NodeId> {
         self.selected_node
     }
 
     /// ノードエディタ全体の描画と入力処理
-    pub fn show(&mut self, ui: &mut Ui, engine: &mut GraphEngine) {
+    pub fn show(&mut self, ui: &mut Ui, engine: &mut GraphEngine, registry: &Registry) {
         let (canvas_rect, canvas_response) =
             ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
 
@@ -79,9 +93,33 @@ impl NodeEditor {
         let canvas_origin = canvas_rect.min + self.pan_offset;
         let pointer_pos = ui.input(|i| i.pointer.interact_pos().or_else(|| i.pointer.latest_pos()));
 
+        // キャンバス右クリック開始時のローカル座標を記録
+        if canvas_response.secondary_clicked() {
+            if let Some(pos) = pointer_pos {
+                self.context_menu_pos = (pos - canvas_origin).to_pos2();
+            }
+        }
+
+        // キャンバス右クリックメニュー：Registry に登録されているノードを作成
+        canvas_response.context_menu(|ui| {
+            ui.label("Add Node");
+            ui.separator();
+            for processor_type in registry.get_processor_types() {
+                if ui.button(format!("+ {processor_type}")).clicked() {
+                    if let Ok(processor) = registry.create_default(processor_type) {
+                        let node_id = engine.add_node(processor);
+                        self.register_node(node_id, self.context_menu_pos);
+                        self.selected_node = Some(node_id);
+                    }
+                    ui.close();
+                }
+            }
+        });
+
         // 2. 各ノードおよびポートのインタラクション判定
         let node_ids: Vec<NodeId> = self.node_positions.keys().copied().collect();
         let mut hovered_port: Option<(NodeId, usize, bool)> = None;
+        let mut node_to_delete: Option<NodeId> = None;
 
         for &node_id in &node_ids {
             let Some((num_inputs, num_outputs)) = engine
@@ -185,7 +223,10 @@ impl NodeEditor {
 
             // ノード本体の選択と移動（ワイヤードラッグ中は移動しない）
             if self.dragging_wire.is_none() {
-                if node_response.clicked() || node_response.drag_started() {
+                if node_response.clicked()
+                    || node_response.secondary_clicked()
+                    || node_response.drag_started()
+                {
                     self.selected_node = Some(node_id);
                 }
                 if node_response.dragged_by(egui::PointerButton::Primary) {
@@ -194,6 +235,25 @@ impl NodeEditor {
                     }
                 }
             }
+
+            // ノード上の右クリックメニュー（ノード削除）
+            node_response.context_menu(|ui| {
+                if ui.button(format!("Delete Node #{node_id}")).clicked() {
+                    node_to_delete = Some(node_id);
+                    ui.close();
+                }
+            });
+        }
+
+        // Delete / Backspace キーによる選択中ノードの削除
+        if ui.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
+            if let Some(selected_id) = self.selected_node {
+                node_to_delete = Some(selected_id);
+            }
+        }
+
+        if let Some(target_id) = node_to_delete {
+            self.delete_node(engine, target_id);
         }
 
         // 3. 確定済みエッジ（ベジェ曲線）の描画（GraphEngine のエッジ情報を直接参照）

@@ -15,6 +15,12 @@ impl GainProcessor {
     }
 }
 
+impl Default for GainProcessor {
+    fn default() -> Self {
+        Self::new(1.0)
+    }
+}
+
 impl Processor for GainProcessor {
     fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String> {
         let input = inputs.get(0).ok_or("input 0 is required")?;

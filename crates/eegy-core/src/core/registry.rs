@@ -1,34 +1,62 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use serde::de::DeserializeOwned;
 use crate::core::processor::Processor;
 
-type NodeFactory = fn(serde_json::Value) -> Result<Box<dyn Processor>, String>; 
+type NodeFactory = fn(serde_json::Value) -> Result<Box<dyn Processor>, String>;
+type DefaultNodeFactory = fn() -> Box<dyn Processor>;
 
-pub struct Registry { 
-    factories: HashMap<String, NodeFactory>
+struct RegistryEntry {
+    from_json: NodeFactory,
+    create_default: DefaultNodeFactory,
 }
 
-impl Registry{
-    pub fn new() -> Self{
-        Self{
-            factories: HashMap::new(),
+pub struct Registry {
+    entries: BTreeMap<String, RegistryEntry>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self {
+            entries: BTreeMap::new(),
         }
     }
-    
-    pub fn register<T>(&mut self, processor_type: &str) 
-    where 
-        T: Processor + DeserializeOwned + 'static,
+
+    pub fn register<T>(&mut self, processor_type: &str)
+    where
+        T: Processor + DeserializeOwned + Default + 'static,
     {
-        let factory : NodeFactory = |value| {
+        let from_json: NodeFactory = |value| {
             let processor: T = serde_json::from_value(value).map_err(|e| e.to_string())?;
             Ok(Box::new(processor))
         };
-        
-        self.factories.insert(processor_type.to_string(), factory);
+        let create_default: DefaultNodeFactory = || Box::new(T::default());
+
+        self.entries.insert(
+            processor_type.to_string(),
+            RegistryEntry {
+                from_json,
+                create_default,
+            },
+        );
     }
-    
+
     pub fn create(&self, processor_type: &str, params: serde_json::Value) -> Result<Box<dyn Processor>, String> {
-        let factory = self.factories.get(processor_type).ok_or(format!("Unknown processor {}", processor_type))?;
-        factory(params)
+        let entry = self
+            .entries
+            .get(processor_type)
+            .ok_or_else(|| format!("Unknown processor {}", processor_type))?;
+        (entry.from_json)(params)
+    }
+
+    pub fn create_default(&self, processor_type: &str) -> Result<Box<dyn Processor>, String> {
+        let entry = self
+            .entries
+            .get(processor_type)
+            .ok_or_else(|| format!("Unknown processor {}", processor_type))?;
+        Ok((entry.create_default)())
+    }
+
+    pub fn get_processor_types(&self) -> impl Iterator<Item = &str> {
+        self.entries.keys().map(String::as_str)
     }
 }
