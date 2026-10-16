@@ -286,6 +286,14 @@ impl GraphEngine {
         
         Ok(execution_order)
     }
+
+    pub fn get_processor(&self, node_id: NodeId) -> Option<&dyn Processor> {
+        self.nodes.get(&node_id).map(|node| &*node.processor)
+    }
+
+    pub fn get_edges(&self) -> impl Iterator<Item = &Edge> {
+        self.edges.values()
+    }
 }
 
 pub struct Node {
@@ -348,9 +356,9 @@ impl Node{
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Edge{
-    pub(crate) id: EdgeId,
-    pub(crate) src_node: NodeId,
-    pub(crate) src_port: usize,
-    pub(crate) dst_node: NodeId,
-    pub(crate) dst_port: usize,
+    pub id: EdgeId,
+    pub src_node: NodeId,
+    pub src_port: usize,
+    pub dst_node: NodeId,
+    pub dst_port: usize,
 }
