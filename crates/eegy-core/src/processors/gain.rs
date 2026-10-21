@@ -15,6 +15,32 @@ impl GainProcessor {
     }
 }
 
+impl ProcessorMeta for GainProcessor {
+    fn get_type(&self) -> &'static str {
+        "Gain"
+    }
+
+    fn get_input_ports(&self) -> &'static [IOPort] {
+        &[
+            IOPort{
+                name: "input",
+                optional: false,
+                types: &[IOType::Time],
+            }
+        ]
+    }
+
+    fn get_output_ports(&self) -> &'static [IOPort] {
+        &[
+            IOPort{
+                name: "output",
+                optional: false,
+                types: &[IOType::Time],
+            }
+        ]
+    }
+}
+
 impl Default for GainProcessor {
     fn default() -> Self {
         Self::new(1.0)
@@ -38,38 +64,12 @@ impl Processor for GainProcessor {
             .and_then(|output| output.as_time_mut())
             .ok_or("Output buffer is not TimeDomain")?;
         
-        output_signal.first_packet_num = input_signal.first_packet_num;
+        output_signal.latest_packet_num = input_signal.latest_packet_num;
         
         for (input, output) in input_signal.data.iter().zip(output_signal.data.iter_mut()){
             *output = self.gain * input;
         } 
         Ok(())
-    }
-}
-
-impl ProcessorMeta for GainProcessor {
-    fn get_type(&self) -> &'static str {
-        "Gain"
-    }
-
-    fn get_input_ports(&self) -> &'static [IOPort] {
-        &[
-            IOPort{
-                name: "input", 
-                optional: false,
-                types: &[IOType::Time], 
-            }
-        ]
-    }
-
-    fn get_output_ports(&self) -> &'static [IOPort] {
-        &[
-            IOPort{
-                name: "output",
-                optional: false,
-                types: &[IOType::Time],
-            }
-        ]
     }
 }
 
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn test_gain_process() {
         let input_buffer = Buffer::Time(TimeDomainBuffer {
-            first_packet_num: 100,
+            latest_packet_num: 100,
             channels: vec!["Fp1".to_string(), "Fp2".to_string()],
             sampling_rate: 250.0,
             data: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
@@ -98,7 +98,7 @@ mod tests {
 
         let out_time = outputs[0].as_time().unwrap();
 
-        assert_eq!(out_time.first_packet_num, 100);
+        assert_eq!(out_time.latest_packet_num, 100);
         assert_eq!(out_time.channels, vec!["Fp1", "Fp2"]);
         assert_eq!(out_time.data, vec![2.0, 4.0, 6.0, 8.0, 10.0, 12.0]);
     }

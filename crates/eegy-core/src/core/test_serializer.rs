@@ -40,7 +40,7 @@ impl ProcessorMeta for ConstantSourceProcessor {
 impl Processor for ConstantSourceProcessor {
     fn setup(&mut self, _inputs: &[&Buffer], outputs: &mut [&mut Buffer]) -> Result<(), String> {
         *outputs[0] = Buffer::Time(TimeDomainBuffer {
-            first_packet_num: 1,
+            latest_packet_num: 1,
             channels: vec!["Ch1".to_string()],
             sampling_rate: 250.0,
             data: vec![1.0 * self.value_scale, 2.0 * self.value_scale, 3.0 * self.value_scale],

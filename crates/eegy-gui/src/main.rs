@@ -5,7 +5,6 @@ use eframe::egui;
 use egui_dock::{DockArea, DockState, NodeIndex, TabViewer};
 use eegy::core::graph_engine::GraphEngine;
 use eegy::core::registry::Registry;
-use eegy::processors::gain::GainProcessor;
 use inspector_view::InspectorView;
 use node_editor::NodeEditor;
 
@@ -48,12 +47,9 @@ struct EegyApp {
 
 impl EegyApp {
     fn new() -> Self {
-        let mut registry = Registry::new();
-        registry.register::<GainProcessor>("Gain");
-
         Self {
             engine: GraphEngine::new(),
-            registry,
+            registry: Registry::new(),
             node_editor: NodeEditor::new(),
             inspector_view: InspectorView::new(),
             dock_state: create_default_dock_state(),

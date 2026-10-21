@@ -1,6 +1,8 @@
 use std::collections::BTreeMap;
 use serde::de::DeserializeOwned;
 use crate::core::processor::Processor;
+use crate::core::registry;
+use crate::processors::register_processors;
 
 type NodeFactory = fn(serde_json::Value) -> Result<Box<dyn Processor>, String>;
 type DefaultNodeFactory = fn() -> Box<dyn Processor>;
@@ -16,9 +18,11 @@ pub struct Registry {
 
 impl Registry {
     pub fn new() -> Self {
-        Self {
+        let mut registry =Self {
             entries: BTreeMap::new(),
-        }
+        };
+        register_processors(&mut registry);
+        registry
     }
 
     pub fn register<T>(&mut self, processor_type: &str)

@@ -23,9 +23,9 @@ impl Buffer {
     }
 }
 
-#[derive(Clone,Debug,PartialEq)]
+#[derive(Clone,Debug,PartialEq,Default)]
 pub struct TimeDomainBuffer{
-    pub first_packet_num: u64,
+    pub latest_packet_num: u64,
     pub channels: Vec<String>,
     pub sampling_rate: f64,
     pub data: Vec<f64>,

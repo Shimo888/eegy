@@ -1,7 +1,8 @@
+use erased_serde::Serialize;
 use serde::de::DeserializeOwned;
 use crate::core::buffer::Buffer;
 
-pub trait Processor: ProcessorMeta + ProcessorParams + erased_serde::Serialize {
+pub trait Processor: ProcessorMeta + ProcessorParams + Serialize {
     fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
     fn process(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
 }
@@ -20,8 +21,7 @@ impl<T: DeserializeOwned> ProcessorParams for T {
 }
 
 pub trait ProcessorMeta{
-    fn get_type(&self) -> &'static str;
-    fn get_input_ports(&self) -> &'static [IOPort]; 
+    fn get_type(&self) -> &'static str; fn get_input_ports(&self) -> &'static [IOPort]; 
     fn get_output_ports(&self) -> &'static [IOPort];
 }
 
