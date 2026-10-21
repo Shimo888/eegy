@@ -6,6 +6,6 @@ pub(crate) mod gain;
 pub(crate) mod source;
 
 pub(crate) fn register_processors(registry: &mut Registry){
-    registry.register::<GainProcessor>("Gain");
-    registry.register::<SourceProcessor>("Source")
+    registry.register::<GainProcessor>();
+    registry.register::<SourceProcessor>()
 }

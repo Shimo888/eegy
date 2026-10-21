@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use serde::de::DeserializeOwned;
 use crate::core::processor::Processor;
-use crate::core::registry;
 use crate::processors::register_processors;
 
 type NodeFactory = fn(serde_json::Value) -> Result<Box<dyn Processor>, String>;
@@ -25,7 +24,7 @@ impl Registry {
         registry
     }
 
-    pub fn register<T>(&mut self, processor_type: &str)
+    pub fn register<T>(&mut self) 
     where
         T: Processor + DeserializeOwned + Default + 'static,
     {
@@ -34,9 +33,9 @@ impl Registry {
             Ok(Box::new(processor))
         };
         let create_default: DefaultNodeFactory = || Box::new(T::default());
-
+        let type_name = T::default().get_type().to_string();
         self.entries.insert(
-            processor_type.to_string(),
+            type_name,
             RegistryEntry {
                 from_json,
                 create_default,

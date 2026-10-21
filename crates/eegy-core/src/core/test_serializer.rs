@@ -135,10 +135,10 @@ impl Processor for FrequencyDummyProcessor {
 
 fn create_test_registry() -> Registry {
     let mut registry = Registry::new();
-    registry.register::<GainProcessor>("Gain");
-    registry.register::<ConstantSourceProcessor>("ConstantSource");
-    registry.register::<AddProcessor>("Add");
-    registry.register::<FrequencyDummyProcessor>("FrequencyDummy");
+    registry.register::<GainProcessor>();
+    registry.register::<ConstantSourceProcessor>();
+    registry.register::<AddProcessor>();
+    registry.register::<FrequencyDummyProcessor>();
     registry
 }
 

@@ -21,7 +21,8 @@ impl<T: DeserializeOwned> ProcessorParams for T {
 }
 
 pub trait ProcessorMeta{
-    fn get_type(&self) -> &'static str; fn get_input_ports(&self) -> &'static [IOPort]; 
+    fn get_type(&self) -> &'static str; 
+    fn get_input_ports(&self) -> &'static [IOPort]; 
     fn get_output_ports(&self) -> &'static [IOPort];
 }
 
