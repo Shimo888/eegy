@@ -446,4 +446,40 @@ mod tests {
             "Stale data from packet 1 remained at dropped packet 5's slot"
         );
     }
+
+    /// 3-3: Zero 補完関数のピンポイント単体テスト
+    #[test]
+    fn test_interpolate_strategy_zero() {
+        let mut data = vec![10.0, 99.0, 99.0, 40.0];
+        SourceProcessor::interpolate_strategy_zero(&mut data, 1, 3);
+        assert_eq!(data, vec![10.0, 0.0, 0.0, 40.0]);
+    }
+
+    /// 3-4: ForwardFill 補完関数のピンポイント単体テスト（通常時 & start_index == 0 時）
+    #[test]
+    fn test_interpolate_strategy_forward_fill() {
+        // 1. 中間欠損（1..3 が直前の index=0 の値 10.0 で埋まること）
+        let mut data = vec![10.0, 99.0, 99.0, 40.0];
+        SourceProcessor::interpolate_strategy_forward_fill(&mut data, 1, 3);
+        assert_eq!(data, vec![10.0, 10.0, 10.0, 40.0]);
+
+        // 2. 先頭欠損（start_index == 0 のときは直後の index=2 の値 30.0 で埋まること）
+        let mut data_head = vec![99.0, 99.0, 30.0, 40.0];
+        SourceProcessor::interpolate_strategy_forward_fill(&mut data_head, 0, 2);
+        assert_eq!(data_head, vec![30.0, 30.0, 30.0, 40.0]);
+    }
+
+    /// 3-5: Linear 補完関数のピンポイント単体テスト（通常時 & start_index == 0 時）
+    #[test]
+    fn test_interpolate_strategy_linear() {
+        // 1. 中間欠損（10.0 と 40.0 の間が 20.0, 30.0 で直線補間されること）
+        let mut data = vec![10.0, 99.0, 99.0, 40.0];
+        SourceProcessor::interpolate_strategy_linear(&mut data, 1, 3);
+        assert_eq!(data, vec![10.0, 20.0, 30.0, 40.0]);
+
+        // 2. 先頭欠損（start_index == 0 のときは直後の index=2 の値 30.0 で埋まること）
+        let mut data_head = vec![99.0, 99.0, 30.0, 40.0];
+        SourceProcessor::interpolate_strategy_linear(&mut data_head, 0, 2);
+        assert_eq!(data_head, vec![30.0, 30.0, 30.0, 40.0]);
+    }
 }
