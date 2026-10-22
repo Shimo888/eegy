@@ -56,34 +56,63 @@ impl SourceProcessor{
         output: &mut TimeDomainBuffer,
         strategy: F
     )
-    where F: Fn(&mut [f64], usize){
+    where F: Fn(&mut [f64], usize, usize){
+        let mut start_index = None;
         for i in 0..self.window_size{
             let ring_index = ((self.latest_packet_num + 1 + i as u64) % (self.window_size as u64)) as usize;
             let real_packet_num = self.packet_nums[ring_index];
             let ideal_packet_num = output.latest_packet_num.saturating_sub((self.window_size - 1 - i) as u64);
 
             if real_packet_num != ideal_packet_num{
+                start_index = if start_index.is_none() { Some(i) } else { start_index };
+                continue;
+            }
+            
+            if start_index.is_some(){ 
                 for ch_index in 0..self.channels.len(){
                     let slice = &mut output.data[self.window_size * ch_index .. self.window_size * (ch_index + 1)];
-                    strategy(slice, i);
+                    strategy(slice, start_index.unwrap(), i);
                 }
+                start_index = None;
             }
         }
     }
     
     /// ゼロ補完
-    fn interpolate_strategy_zero(data: &mut [f64], index: usize){
-        data[index] = 0.0;
+    fn interpolate_strategy_zero(data: &mut [f64], start_index: usize, end_index: usize){
+        data[start_index..end_index].fill(0.0);
     }
     
     /// 前回値保持
-    fn interpolate_strategy_forward_fill(data: &mut [f64], index: usize){
-        //todo
+    fn interpolate_strategy_forward_fill(data: &mut [f64], start_index: usize, end_index: usize){
+        // index=0のときは参照できる前回値がないので、次の値を参考にする
+        if start_index == 0{
+            let right_val = data[end_index];
+            data[start_index..end_index].fill(right_val);
+            return;
+        }
+        
+        let left_val = data[start_index - 1];
+        data[start_index..end_index].fill(left_val);
     }
     
     /// 線形補完
-    fn interpolate_strategy_linear(data: &mut [f64], index: usize){
-        //todo
+    fn interpolate_strategy_linear(data: &mut [f64], start_index: usize, end_index: usize){
+        // index=0のときは参照できる前回値がないので、次の値を参考にする
+        if start_index == 0{
+            let right_val = data[end_index];
+            data[start_index..end_index].fill(right_val);
+            return;
+        }
+        
+        let k = (data[end_index] - data[start_index -1]) / (end_index - start_index + 1) as f64;
+        let start = data[start_index -1];
+        data[start_index..end_index]
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i,v)| {
+                *v = start + k * (i + 1) as f64;
+            })
     }
 }
 
