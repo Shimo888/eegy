@@ -1,5 +1,4 @@
 use std::cmp::max;
-use std::sync::mpsc::channel;
 use crate::core::buffer::{Buffer, TimeDomainBuffer};
 use crate::core::processor::IOType::Time;
 use crate::core::processor::{IOPort, Processor, ProcessorMeta};
@@ -14,6 +13,7 @@ pub struct SourceProcessor{
     channels: Vec<String>,
     sample_rate: f64,
     window_size: usize,
+    interpolation_strategy: InterpolationStrategy,
     
     /// 各電極の電圧値を格納
     /// size = window_size x (電極の種類数)
@@ -21,9 +21,9 @@ pub struct SourceProcessor{
     #[serde(skip)]
     ring_buffer: Vec<f64>,
     
-    /// サンプル番号の配列
+    /// パケット番号の配列
     #[serde(skip)]
-    sample_nums: Vec<u64>,
+    packet_nums: Vec<u64>,
     
     /// 一番新しいパケット番号 
     #[serde(skip)]
@@ -41,13 +41,49 @@ impl SourceProcessor{
         }
         
         let index = (packet_num % self.window_size as u64) as usize;
-        self.sample_nums[index] = packet_num;
+        self.packet_nums[index] = packet_num;
         self.latest_packet_num = max(self.latest_packet_num, packet_num);
         for (ch_index, &data) in packet_data.iter().enumerate(){
             let buffer_index = ch_index * self.window_size + index;
             self.ring_buffer[buffer_index] = data;
         }
         Ok(())
+    }
+    
+    /// 欠損パケットの補完
+    fn interpolate_missing_packet<F>(
+        & self,
+        output: &mut TimeDomainBuffer,
+        strategy: F
+    )
+    where F: Fn(&mut [f64], usize){
+        for i in 0..self.window_size{
+            let ring_index = ((self.latest_packet_num + 1 + i as u64) % (self.window_size as u64)) as usize;
+            let real_packet_num = self.packet_nums[ring_index];
+            let ideal_packet_num = output.latest_packet_num.saturating_sub((self.window_size - 1 - i) as u64);
+
+            if real_packet_num != ideal_packet_num{
+                for ch_index in 0..self.channels.len(){
+                    let slice = &mut output.data[self.window_size * ch_index .. self.window_size * (ch_index + 1)];
+                    strategy(slice, i);
+                }
+            }
+        }
+    }
+    
+    /// ゼロ補完
+    fn interpolate_strategy_zero(data: &mut [f64], index: usize){
+        data[index] = 0.0;
+    }
+    
+    /// 前回値保持
+    fn interpolate_strategy_forward_fill(data: &mut [f64], index: usize){
+        //todo
+    }
+    
+    /// 線形補完
+    fn interpolate_strategy_linear(data: &mut [f64], index: usize){
+        //todo
     }
 }
 
@@ -57,8 +93,9 @@ impl Default for SourceProcessor{
             channels: vec!["Ch1".to_string()],
             sample_rate: 250.0,
             window_size: 256,
+            interpolation_strategy: InterpolationStrategy::default(),
             ring_buffer: Vec::new(),
-            sample_nums: Vec::new(),
+            packet_nums: Vec::new(),
             latest_packet_num: 0,
         }
     }
@@ -90,7 +127,7 @@ impl Processor for SourceProcessor {
         }
         
         self.ring_buffer = vec![0.0; self.channels.len() * self.window_size];
-        self.sample_nums = vec![0; self.window_size];
+        self.packet_nums = vec![0; self.window_size];
         self.latest_packet_num = 0;
         
         let output = TimeDomainBuffer{
@@ -114,6 +151,8 @@ impl Processor for SourceProcessor {
         let latest_index = (self.latest_packet_num % self.window_size as u64) as usize;
         let oldest_index = (latest_index + 1) % self.window_size;
         let first_part_len = self.window_size - oldest_index;
+        
+        // リングバッファのスライスコピー
         for ch_index in 0..self.channels.len() {
             let ring_slice = &self.ring_buffer[ch_index * self.window_size..(ch_index + 1) * self.window_size];
             let output_slice = &mut output0.data[ch_index * self.window_size..(ch_index + 1) * self.window_size];
@@ -122,8 +161,29 @@ impl Processor for SourceProcessor {
             output_slice[first_part_len..].copy_from_slice(&ring_slice[..oldest_index]);
         }
         
+        // データ欠損を補完
+        match self.interpolation_strategy{
+            InterpolationStrategy::Zero => self.interpolate_missing_packet(output0, Self::interpolate_strategy_zero),
+            InterpolationStrategy::ForwardFill => self.interpolate_missing_packet(output0, Self::interpolate_strategy_forward_fill),
+            InterpolationStrategy::Linear => self.interpolate_missing_packet(output0, Self::interpolate_strategy_linear),
+        }
+        
         Ok(())
     }
+}
+
+/// データ欠損時の補完方法
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+enum InterpolationStrategy {
+    /// ゼロ埋め
+    Zero,
+    
+    /// 前回値保持 
+    #[default]
+    ForwardFill,
+    
+    /// 線形補完
+    Linear,
 }
 
 #[cfg(test)]
