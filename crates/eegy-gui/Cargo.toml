@@ -7,5 +7,6 @@ edition = "2024"
 eegy-core = { version = "0.1.0", path = "../eegy-core" }
 eframe = "0.36.0"
 egui_dock = "0.21.1"
+rfd = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -14,7 +14,8 @@ pub struct SourceProcessor{
     sample_rate: f64,
     window_size: usize,
     interpolation_strategy: InterpolationStrategy,
-    
+
+    // todo: マルチスレッドで動作させるのでMutexに変更させる必要がありそう...
     /// 各電極の電圧値を格納
     /// size = window_size x (電極の種類数)
     /// [O1の電圧の配列..., O2の電圧の配列, ...]のように並ぶ
