@@ -1,8 +1,9 @@
+use std::any::Any;
 use erased_serde::Serialize;
 use serde::de::DeserializeOwned;
 use crate::core::buffer::Buffer;
 
-pub trait Processor: ProcessorMeta + ProcessorParams + Serialize {
+pub trait Processor: ProcessorMeta + ProcessorParams + Serialize + Any{
     fn setup(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
     fn process(&mut self, inputs: &[&Buffer], outputs: &mut[&mut Buffer]) -> Result<(), String>;
 }

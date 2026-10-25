@@ -1,7 +1,9 @@
+use std::any::Any;
 use smallvec::SmallVec;
 use crate::core::processor::Processor;
 use std::collections::BTreeMap;
 use crate::core::buffer::Buffer;
+use crate::processors::source::SourceProcessor;
 
 pub type NodeId = usize;
 pub type EdgeId = usize;
@@ -238,7 +240,7 @@ impl GraphEngine {
     /// # 戻り値
     /// - `Ok(Vec<NodeId>)`: 循環のない正しい実行順リスト。
     /// - `Err(String)`: グラフ内に循環参照（ループ）が検知された場合。
-    pub fn build_execution_order(&self) -> Result<Vec<NodeId>, String>{
+    pub(crate) fn build_execution_order(&self) -> Result<Vec<NodeId>, String>{
 
         let mut input_nums = BTreeMap::new();
         let mut execution_queue = Vec::new();
@@ -299,6 +301,27 @@ impl GraphEngine {
 
     pub fn get_edges(&self) -> impl Iterator<Item = &Edge> {
         self.edges.values()
+    }
+    
+    fn get_processor_as_mut<P>(&mut self, node_id: NodeId) -> Option<&mut P> 
+    where P: Processor{
+        let node = self.nodes.get_mut(&node_id)?;
+        let any_mut = &mut *node.processor as &mut dyn Any;
+        any_mut.downcast_mut::<P>()
+    }
+    
+    /// Packetの送信
+    pub fn push_packet(
+        &mut self,
+        node_id: NodeId,
+        packet_num: u64,
+        packet_data: &[f64]
+    ) -> Result<(), String>{
+        if let Some(source_processor) = self.get_processor_as_mut::<SourceProcessor>(node_id){
+            return source_processor.push_packet(packet_num, packet_data)
+        }
+        
+        Err(format!("Node{} is not a processor", node_id))
     }
 }
 
