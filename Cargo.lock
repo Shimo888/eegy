@@ -866,6 +866,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "eegy-device"
+version = "0.1.0"
+
+[[package]]
 name = "eegy-gui"
 version = "0.1.0"
 dependencies = [
