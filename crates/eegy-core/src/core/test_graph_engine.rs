@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use crate::core::buffer::{Buffer, TimeDomainBuffer};
 use crate::core::graph_engine::GraphEngine;
-use crate::core::processor::{IOPort, IOType, Processor, ProcessorMeta};
+use crate::core::processor::{IOPort, IOType, Processor, ProcessorMeta, ProcessorParams};
 use crate::processors::gain::GainProcessor;
+use crate::processors::source::SourceProcessor;
 
 // 型不一致テスト用のダミープロセッサ（周波数領域専用）
 #[derive(Serialize, Deserialize)]
@@ -870,4 +871,79 @@ fn test_process_fan_out() {
     let buf_b_idx = gain_b_node.out_buffer_indices[0];
     let out_buf_b = &engine.buffers[buf_b_idx];
     assert_eq!(out_buf_b.as_time().unwrap().data, vec![5.0, 10.0]);
+}
+
+// ==========================================
+// 7. push_packet テスト
+// ==========================================
+
+/// GraphEngine::push_packet で SourceProcessor にパケットを投入し、
+/// is_ready を保ったまま下流の GainProcessor までデータが伝播するテスト
+#[test]
+fn test_push_packet_to_source_and_process_pipeline() {
+    let mut engine = GraphEngine::new();
+
+    let mut source = SourceProcessor::default();
+    source
+        .set_params(serde_json::json!({
+            "channels": ["Ch1", "Ch2"],
+            "sample_rate": 250.0,
+            "window_size": 4,
+            "interpolation_strategy": "ForwardFill"
+        }))
+        .unwrap();
+
+    let n_source = engine.add_node(Box::new(source));
+    let n_gain = engine.add_node(Box::new(GainProcessor::new(2.0)));
+
+    engine.connect(n_source, 0, n_gain, 0).unwrap();
+    engine.setup().unwrap();
+
+    // 4パケット分を順番に投入（is_ready が維持されることも確認）
+    engine.push_packet(n_source, 1, &[1.0, 10.0]).unwrap();
+    engine.push_packet(n_source, 2, &[2.0, 20.0]).unwrap();
+    engine.push_packet(n_source, 3, &[3.0, 30.0]).unwrap();
+    engine.push_packet(n_source, 4, &[4.0, 40.0]).unwrap();
+
+    // 再 setup() なしでそのまま process() できること
+    engine.process().unwrap();
+
+    // Gain ノードの出力バッファを確認（Channel-major で 2.0 倍されているはず）
+    let gain_node = engine.nodes.get(&n_gain).unwrap();
+    let out_buf = &engine.buffers[gain_node.out_buffer_indices[0]];
+    let time_buf = out_buf.as_time().expect("Should be TimeDomainBuffer");
+
+    assert_eq!(time_buf.latest_packet_num, 4);
+    assert_eq!(time_buf.channels, vec!["Ch1", "Ch2"]);
+    assert_eq!(
+        time_buf.data,
+        vec![2.0, 4.0, 6.0, 8.0, 20.0, 40.0, 60.0, 80.0]
+    );
+}
+
+/// GraphEngine::push_packet の異常系テスト:
+/// - 存在しないノードID
+/// - SourceProcessor 以外のノード（GainProcessor）への投入
+/// - setup() 前の未初期化状態での投入
+#[test]
+fn test_push_packet_error_cases() {
+    let mut engine = GraphEngine::new();
+
+    let n_source = engine.add_node(Box::new(SourceProcessor::default()));
+    let n_gain = engine.add_node(Box::new(GainProcessor::new(1.0)));
+
+    // 1. setup() 前に push_packet を呼ぶと未初期化エラーになること
+    assert!(engine.push_packet(n_source, 1, &[1.0]).is_err());
+
+    engine.connect(n_source, 0, n_gain, 0).unwrap();
+    engine.setup().unwrap();
+
+    // 2. 存在しない node_id を指定するとエラーになること
+    assert!(engine.push_packet(999, 1, &[1.0]).is_err());
+
+    // 3. SourceProcessor ではないノード（GainProcessor）を指定するとエラーになること
+    assert!(engine.push_packet(n_gain, 1, &[1.0]).is_err());
+
+    // 4. チャンネル数が一致しないデータを送るとエラーになること
+    assert!(engine.push_packet(n_source, 1, &[1.0, 2.0]).is_err());
 }
