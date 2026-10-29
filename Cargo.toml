@@ -1,5 +1,5 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/eegy-core", "crates/eegy-device", "crates/eegy-gui",
+    "crates/eegy-core", "crates/eegy-device", "crates/eegy-gui", "crates/eegy-simulator",
 ]
