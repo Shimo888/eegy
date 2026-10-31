@@ -6,6 +6,7 @@ pub trait SignalSimulator {
 pub struct StepContext{
     pub packet_num: u64,
     pub sampling_rate: f64,
+    pub step: usize,
 }
 
 impl StepContext{
@@ -18,6 +19,6 @@ impl StepContext{
     /// 1ステップあたりの時間刻み幅
     #[inline]
     pub fn dt(&self) -> f64{
-        1.0 / self.sampling_rate
+        self.step as f64 / self.sampling_rate
     }
 } 
